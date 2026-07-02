@@ -1,0 +1,36 @@
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Applio (large, cloned separately)
+Applio/
+
+# Trained RVC voice model (biometric data — do not publish)
+models/
+
+# Training data (personal voice recordings)
+daniel_rvc_training.wav
+*.wav
+*.m4a
+*.flac
+*.mp3
+
+# Outputs (personal audio + large)
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temp
+*.tmp
+*.log
