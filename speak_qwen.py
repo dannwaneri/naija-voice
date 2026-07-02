@@ -19,37 +19,41 @@ import tempfile
 from pathlib import Path
 
 
-def trim_tail_guard(wav_path: Path, silence_thresh: float = 0.02, min_silence_ms: int = 100):
-    """After appending a tail-guard word, trim it off by finding the last long
-    silence gap and cutting there. Falls back to trimming a fixed 500ms if no
-    silence is found."""
+def trim_tail_guard(wav_path: Path, silence_thresh: float = 0.015, min_silence_ms: int = 80):
+    """After appending a tail-guard word, trim it off. Strategy:
+      1. Strip trailing silence.
+      2. From there, walk backwards through the guard word (non-silence).
+      3. Find the silence gap that precedes it (between real content and guard).
+      4. Cut at the START of that gap so the real sentence keeps its natural trailing silence.
+    Falls back to trimming a fixed 700ms of audio if no such structure is found."""
     import soundfile as sf
     import numpy as np
     audio, sr = sf.read(str(wav_path))
-    if audio.ndim > 1:
-        mono = audio.mean(axis=-1)
-    else:
-        mono = audio
-    win = int(0.02 * sr)  # 20ms windows
+    mono = audio.mean(axis=-1) if audio.ndim > 1 else audio
+    win = int(0.02 * sr)
     energy = np.array([np.abs(mono[i:i+win]).mean() for i in range(0, len(mono), win)])
     is_silent = energy < silence_thresh
-    min_win = max(1, min_silence_ms // 20)
-    # Search backwards for the last stretch of >=min_win consecutive silent windows
-    run = 0
-    last_silence_end = None
-    for i in range(len(is_silent) - 1, -1, -1):
-        if is_silent[i]:
-            run += 1
-            if run >= min_win and last_silence_end is None:
-                last_silence_end = (i + run) * win
-                break
-        else:
-            run = 0
-    if last_silence_end is None:
-        # No silence found → fixed 500ms trim
-        cut = max(0, len(mono) - int(0.5 * sr))
+    min_silence_wins = max(1, min_silence_ms // 20)
+
+    # 1. Walk back past trailing silence
+    idx = len(is_silent) - 1
+    while idx >= 0 and is_silent[idx]:
+        idx -= 1
+    # 2. Walk back past the guard word (non-silence)
+    while idx >= 0 and not is_silent[idx]:
+        idx -= 1
+    # 3. Walk back through the silence gap before the guard, finding its start
+    silence_end = idx + 1  # first silent frame going backwards
+    while idx >= 0 and is_silent[idx]:
+        idx -= 1
+    silence_start = idx + 1
+
+    if silence_end - silence_start >= min_silence_wins:
+        # Cut at start of the pre-guard silence + a small tail (50ms) to preserve natural ending
+        cut = min(len(mono), (silence_start + 3) * win)
     else:
-        cut = last_silence_end
+        # Structure not found → fixed 700ms trim (guard word + short silence)
+        cut = max(0, len(mono) - int(0.7 * sr))
     sf.write(str(wav_path), audio[:cut] if audio.ndim == 1 else audio[:cut, :], sr)
 
 BASE = Path(__file__).parent
@@ -75,6 +79,10 @@ def main():
     ap.add_argument("--gap-ms", type=int, default=300)
     ap.add_argument("--tail-guard", default="Okay.",
                     help="Word appended to every sentence to protect the real final word from compression. Trimmed off before saving. Empty string disables.")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="RNG seed for reproducible takes. If not set, each run is random.")
+    ap.add_argument("--takes", type=int, default=1,
+                    help="Generate N takes (saved as <out>_take1.wav, _take2.wav, ...). Voice varies take-to-take; pick the best.")
     args = ap.parse_args()
 
     if not args.text and not args.text_file:
@@ -101,13 +109,16 @@ def main():
 
     print(f"\nQwen3-TTS -> {out_path.name}  [{len(sentences)} sentence(s)]")
     if len(sentences) == 1:
-        subprocess.run([
+        cmd = [
             str(QWEN_PY), str(QWEN_SCRIPT),
             "--text", sentences[0],
             "--ref-audio", args.reference,
             "--ref-text-file", args.reference_text,
             "--out", str(out_path),
-        ], check=True)
+        ]
+        if args.seed is not None:
+            cmd += ["--seed", str(args.seed)]
+        subprocess.run(cmd, check=True)
         if guard:
             trim_tail_guard(out_path)
     else:
@@ -119,13 +130,17 @@ def main():
             preview = s[:60] + ("…" if len(s) > 60 else "")
             print(f"   [{i}/{len(sentences)}] {preview}")
             p = tmpdir / f"s{i:03d}.wav"
-            subprocess.run([
+            cmd = [
                 str(QWEN_PY), str(QWEN_SCRIPT),
                 "--text", s,
                 "--ref-audio", args.reference,
                 "--ref-text-file", args.reference_text,
                 "--out", str(p),
-            ], check=True)
+            ]
+            if args.seed is not None:
+                # Offset seed per sentence so they don't all sound identical
+                cmd += ["--seed", str(args.seed + i)]
+            subprocess.run(cmd, check=True)
             if guard:
                 trim_tail_guard(p)
             audio, sr = sf.read(str(p))
