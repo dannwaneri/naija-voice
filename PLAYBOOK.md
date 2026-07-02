@@ -1,18 +1,26 @@
 # Daniel Voice Pipeline — Production Playbook
 
-## The shipped pipeline
+## The shipped pipeline (current — Qwen3-TTS single-stage)
 
 ```
-text → Afro-TTS (Nigerian accent + clear phonetics)
-     → RVC (Daniel's voice timbre)
+text → Qwen3-TTS (voice + accent + intelligibility, all in one)
      → final WAV
 ```
+
+No RVC needed. Qwen3-TTS's 5M-hour training captures voice + accent tightly enough from a single reference clip. Tested 2026-07-02 on the connections script (~280 chars): voice stayed consistent throughout, Nigerian accent preserved, no drift.
+
+**Use `speak_qwen.py`.**
+
+## Legacy pipelines (kept for reference)
+
+- `speak_afro.py` — Afro-TTS + RVC. Works, but voice drifts on multi-sentence content. Superseded by `speak_qwen.py`.
+- `speak.py` — YarnGPT + RVC. Superseded twice. Kept as historical reference only.
 
 ## Quick start
 
 ```powershell
 C:\Users\DELL\rvc-pipeline\.venv\Scripts\activate
-python C:\Users\DELL\rvc-pipeline\speak_afro.py --text "Your script here"
+python C:\Users\DELL\rvc-pipeline\speak_qwen.py --text "Your script here"
 ```
 
 Output lands in `C:\Users\DELL\rvc-pipeline\outputs\`.
@@ -20,8 +28,8 @@ Output lands in `C:\Users\DELL\rvc-pipeline\outputs\`.
 Useful flags:
 - `--text-file script.txt` — read from file instead of CLI string
 - `--out path.wav` — explicit output path
-- `--keep-intermediate` — saves the pre-RVC Afro-TTS output alongside for debugging
-- `--pitch -2` (default), `--index-rate 1.0` (default), `--protect 0.0` (default) — RVC voice-match params, leave alone
+- `--reference other.wav --reference-text other.txt` — clone a different voice
+- `--split-threshold 300` — long input auto-splits into sentences (default 300 chars)
 
 ## Realistic expectations
 
@@ -59,13 +67,19 @@ What helps:
 - `outputs/daniel_baseline_good.wav` — the original "this sounds like me" sample. Reference floor.
 - `outputs/afro_002_voiced.wav` — best known intro take. Reference ceiling.
 
-## Backup of what works
+## Backup of what works (current)
 
-If something breaks after future changes:
+- Pipeline: `speak_qwen.py` (single-stage Qwen3-TTS, no RVC)
+- Model: `Qwen/Qwen3-TTS-12Hz-1.7B-Base` (~5 GB, cached in `~/.cache/huggingface/`)
+- Reference clip: `C:\Users\DELL\xtts-clone\speakers\daniel\my_voice_full.wav` (59.2 sec, single continuous take)
+- Reference transcript: `C:\Users\DELL\qwen-tts\reference_transcript.txt` (Whisper-generated)
+- Auto-split threshold: 300 chars
+
+## Backup for legacy fallback (if Qwen3-TTS ever breaks)
+
+- Afro-TTS + RVC pipeline: `speak_afro.py`
 - Tuned RVC params: `--pitch -4 --index-rate 1.0 --protect 0.0`
 - Tuned Afro-TTS: `--gpt-cond-len 15`
-- Auto-split threshold: 200 chars (longer input auto-splits into sentences)
-- Reference clip: `C:\Users\DELL\xtts-clone\speakers\daniel\my_voice_full.wav` (59.2 sec, single continuous take)
 - RVC model: 50 epochs, at `C:\Users\DELL\rvc-pipeline\models\daniel\daniel_50e_2950s.pth`
 
 ## Hard-learned lessons (do not relearn)
@@ -76,7 +90,12 @@ If something breaks after future changes:
 
 3. **Sentence-final words get compressed.** If a critical word lands at the very end of a sentence, the model may swallow it. Bury important words mid-sentence, or pad the end with a throwaway word.
 
-4. **YarnGPT vs Afro-TTS:** YarnGPT had ~30-40% intelligibility on hard content. Afro-TTS+RVC has ~85% on the same content, ~95% on simple content. YarnGPT pipeline (`speak.py`) is legacy — use `speak_afro.py`.
+4. **Pipeline evolution:**
+   - YarnGPT+RVC: ~30-40% intelligibility on hard content (unreliable pronunciation)
+   - Afro-TTS+RVC: ~85% intelligibility, but voice drifts on multi-sentence content
+   - Qwen3-TTS alone: voice + accent + intelligibility from single reference clip, no drift observed. **Current default.**
+
+6. **RVC ceases being useful when upstream TTS is strong enough.** Qwen3-TTS's 5M-hour training makes RVC (trained on 20 min) net-negative — it adds artifacts rather than fixing voice. Tested 2026-07-02: `qwen_intro_qwen.wav` (no RVC) preferred over `qwen_intro.wav` (with RVC).
 
 5. **Last word "distance" got eaten** on the connections script. Fix: end with a buffer word like "Yeah." or "basically." Then trim the buffer in audio editor if needed.
 

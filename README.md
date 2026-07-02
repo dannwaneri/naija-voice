@@ -1,15 +1,14 @@
 # Nigerian-accented voice cloning pipeline
 
-Two-stage TTS pipeline that generates speech in a target voice while preserving Nigerian accent:
+Single-stage TTS pipeline that generates speech in a target voice while preserving Nigerian accent:
 
 ```
-text
-  → Afro-TTS (accent + phonetics)   [XTTS-v2 fine-tuned on African voices]
-  → RVC       (target voice timbre) [Retrieval-based Voice Conversion]
-  → WAV
+text → Qwen3-TTS (voice + accent + intelligibility) → WAV
 ```
 
-Built for content creation where existing TTS options either wash out the Nigerian accent (XTTS, F5-TTS) or produce unreliable audio quality (YarnGPT).
+Built for content creation where existing options either wash out the Nigerian accent (XTTS, F5-TTS), produce unreliable audio (YarnGPT), or drift mid-audio on long content (Afro-TTS).
+
+Historical two-stage pipelines using RVC on top of Afro-TTS or YarnGPT are kept as legacy fallbacks — see PLAYBOOK.md.
 
 ## Status
 
@@ -19,8 +18,9 @@ Known ceiling: ~95% intelligibility on simple content, ~85% on slang-heavy conte
 
 ## Layout
 
-- `speak_afro.py` — main pipeline (Afro-TTS + RVC). **Use this.**
-- `speak.py` — legacy pipeline (YarnGPT + RVC). Kept for reference.
+- `speak_qwen.py` — **current pipeline (Qwen3-TTS single-stage). Use this.**
+- `speak_afro.py` — legacy pipeline (Afro-TTS + RVC). Kept as fallback.
+- `speak.py` — legacy pipeline (YarnGPT + RVC). Historical reference.
 - `convert.py` — standalone RVC inference on any input WAV.
 - `prep_training_audio.py` — combines dataset clips into a single training WAV for RVC.
 - `rvc_convert.py` — early prototype, superseded by `convert.py`.
@@ -31,10 +31,11 @@ Known ceiling: ~95% intelligibility on simple content, ~85% on slang-heavy conte
 
 ## External dependencies (not in this repo)
 
-The pipeline shells out to two sibling projects:
+The pipeline shells out to sibling projects:
 
-- **YarnGPT** at `C:\Users\DELL\yarngpt\` (only used by legacy `speak.py`) — [saheedniyi/YarnGPT](https://github.com/saheedniyi02/yarngpt)
-- **Afro-TTS** at `C:\Users\DELL\afro-tts\` — [intronhealth/afro-tts](https://huggingface.co/intronhealth/afro-tts)
+- **Qwen3-TTS** at `C:\Users\DELL\qwen-tts\` (current default) — [QwenLM/Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)
+- **Afro-TTS** at `C:\Users\DELL\afro-tts\` (legacy) — [intronhealth/afro-tts](https://huggingface.co/intronhealth/afro-tts)
+- **YarnGPT** at `C:\Users\DELL\yarngpt\` (legacy) — [saheedniyi/YarnGPT](https://github.com/saheedniyi02/yarngpt)
 
 Each has its own venv because their dep trees conflict.
 
@@ -52,22 +53,20 @@ Each has its own venv because their dep trees conflict.
 
 ```powershell
 .\.venv\Scripts\activate
-python speak_afro.py --text "Your script here"
-python speak_afro.py --text-file script.txt --out outputs/episode1.wav
+python speak_qwen.py --text "Your script here"
+python speak_qwen.py --text-file script.txt --out outputs/episode1.wav
 ```
 
-See `python speak_afro.py --help` for all flags.
+See `python speak_qwen.py --help` for all flags.
 
-## Upgrade paths (2026)
+## Upgrade paths (future)
 
-The 2024-era models this pipeline uses have real ceilings. Modern alternatives worth swapping in when you have time:
+Current pipeline uses [Qwen3-TTS 1.7B](https://github.com/QwenLM/Qwen3-TTS), which as of Q2 2026 handles voice + accent + long-form intelligibility from a single reference clip. If a better model appears, the pipeline is architecturally trivial to swap (one subprocess call).
 
-- **[VoxCPM2](https://voxcpm.net/)** — 2B params, SOTA voice similarity, cross-lingual with accent preservation
-- **[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)** — Alibaba, 5M hrs training, best zero-shot cloning
-- **[Fish Audio S2](https://fish.audio/)** — designed for long-form (audiobook) consistency, 15-sec reference
-- **[dots.tts](https://github.com/HiLab-git/dots.tts)** — streaming, accent-preserving
-
-Any of these could replace the Afro-TTS stage with tighter accent capture and less voice drift on longer content.
+Watch:
+- **[VoxCPM2](https://voxcpm.net/)** — 2B params, SOTA voice similarity, but CUDA-first (Windows CPU currently blocked)
+- **[Fish Audio S2](https://fish.audio/)** — designed for long-form audiobook consistency
+- **[dots.tts](https://github.com/HiLab-git/dots.tts)** — 54ms streaming for real-time use cases
 
 ## License
 
