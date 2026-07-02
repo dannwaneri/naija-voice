@@ -51,13 +51,16 @@ Each has its own venv because their dep trees conflict.
 
 ## Usage
 
+**Recommended: Colab GPU** — open [`qwen_colab.ipynb`](qwen_colab.ipynb) in Colab, set T4 GPU runtime. Generation is 20-50× faster than local CPU, and the `min_new_tokens` patch works cleanly (prevents mid-sentence truncation).
+
+**Local CPU:**
 ```powershell
 .\.venv\Scripts\activate
 python speak_qwen.py --text "Your script here"
 python speak_qwen.py --text-file script.txt --out outputs/episode1.wav
 ```
 
-See `python speak_qwen.py --help` for all flags.
+Local CPU works but is slow when `min_new_tokens` is forced high enough to prevent truncation. See `python speak_qwen.py --help` for all flags.
 
 ## Upgrade paths (future)
 

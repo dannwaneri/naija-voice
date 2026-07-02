@@ -7,9 +7,24 @@ text → Qwen3-TTS (voice + accent + intelligibility, all in one)
      → final WAV
 ```
 
-No RVC needed. Qwen3-TTS's 5M-hour training captures voice + accent tightly enough from a single reference clip. Tested 2026-07-02 on the connections script (~280 chars): voice stayed consistent throughout, Nigerian accent preserved, no drift.
+No RVC needed. Qwen3-TTS's 5M-hour training captures voice + accent tightly enough from a single reference clip.
 
-**Use `speak_qwen.py`.**
+### Runtime: use Colab GPU, not local CPU
+
+- **Colab T4 GPU (recommended):** open `qwen_colab.ipynb` in Colab, set T4 GPU runtime. Generation ~5-15 sec per line.
+- **Local CPU:** works but prohibitively slow when `min_new_tokens` is forced high enough to prevent truncation (10+ min per line). Only use for very short lines.
+
+### Critical settings (baked into `qwen_colab.ipynb`)
+
+- **Model:** `Qwen/Qwen3-TTS-12Hz-1.7B-Base`
+- **Patched:** `min_new_tokens: 2` (hardcoded in stock package) → `kwargs.pop("min_new_tokens", 2)`. Without this patch, model truncates mid-sentence on ~half of inputs.
+- **Seed:** 3 for Daniel's voice (found via seed sweep)
+- **Temperature:** 0.7 (lower = more consistent voice match)
+- **Min tokens per char:** 15 (forces model to speak full sentence)
+- **Reference:** `my_voice_full.wav` (59.2s single-take)
+- **Reference transcript:** `reference_transcript.txt` (Whisper-generated)
+
+Tested 2026-07-02 on Colab GPU: voice matches, accent preserved, full sentence delivered, generation fast.
 
 ## Legacy pipelines (kept for reference)
 
