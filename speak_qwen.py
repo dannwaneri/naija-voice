@@ -77,8 +77,8 @@ def main():
     ap.add_argument("--split-threshold", type=int, default=300,
                     help="Auto-split into sentences when input exceeds this char count")
     ap.add_argument("--gap-ms", type=int, default=300)
-    ap.add_argument("--tail-guard", default="Okay.",
-                    help="Word appended to every sentence to protect the real final word from compression. Trimmed off before saving. Empty string disables.")
+    ap.add_argument("--tail-guard", default="",
+                    help="Optional: word appended to every sentence to protect the real final word from compression. Auto-trimmed. Off by default because silence detection is unreliable on some inputs. Pass 'Okay.' or 'Yeah.' to enable.")
     ap.add_argument("--seed", type=int, default=None,
                     help="RNG seed for reproducible takes. If not set, each run is random.")
     ap.add_argument("--takes", type=int, default=1,
