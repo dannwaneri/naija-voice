@@ -8,9 +8,13 @@
 
 ## Summary
 
-`Qwen3TTSModel.generate_voice_clone(...)` accepts arbitrary kwargs (including `min_new_tokens`) via `**kwargs` and forwards them through `_merge_generate_kwargs`. However, the low-level `SpeechTalkerModel.generate()` at `qwen_tts/core/models/modeling_qwen3_tts.py:2046` **hardcodes** `"min_new_tokens": 2`, silently overriding whatever the user passed. As a result, the model can emit its EOS code within the first few tokens, producing truncated audio on many otherwise valid seeds.
+The [README explicitly documents](https://github.com/QwenLM/Qwen3-TTS#python-package-usage) that users can pass Hugging Face Transformers `generate()` kwargs to `generate_voice_clone(...)`:
 
-Behaviorally this looks like: `generate_voice_clone` returns cleanly (no error), the audio file is written, but only ~30-40% of the requested sentence is spoken — the remainder is cut off mid-phrase.
+> "besides the parameters shown and explicitly documented, you can also pass generation kwargs supported by Hugging Face Transformers `model.generate`, e.g., `max_new_tokens`, `top_p`, etc."
+
+`min_new_tokens` is one of those kwargs. It's accepted at the top of the call chain (via `**kwargs`) and forwarded through `_merge_generate_kwargs`. However, the low-level `SpeechTalkerModel.generate()` at `qwen_tts/core/models/modeling_qwen3_tts.py:2046` **hardcodes** `"min_new_tokens": 2` when it builds `talker_kwargs`, silently discarding whatever the user passed.
+
+As a result, the model can emit its EOS code within the first few tokens, producing truncated audio on many otherwise valid seeds. Behaviorally: `generate_voice_clone` returns cleanly (no error), the audio file is written, but only ~30-40% of the requested sentence is spoken — the remainder is cut off mid-phrase.
 
 ## Reproducer
 
@@ -58,7 +62,7 @@ With `min_new_tokens=500` respected, the model would be forced to keep generatin
 
 ## Root cause
 
-`qwen_tts/core/models/modeling_qwen3_tts.py`, around line 2044:
+`qwen_tts/core/models/modeling_qwen3_tts.py`, around line 2044 (in the `SpeechTalkerModel.generate()` method):
 
 ```python
 talker_kwargs = {
